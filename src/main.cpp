@@ -62,7 +62,8 @@ class Camera:public PhysicsObject{
     bool moveRight;
     bool moveUp = false;
     bool moveDown = false;
-    float theta = 0;
+    float horizontalAngle = 0;
+    float verticalAngle = 0;
 };
 
 class Mouse{
@@ -98,13 +99,18 @@ class Line{
 
 std::vector<sf::Vector2f> resolvePoints(std::vector<Point>& points, Camera& camera){
         std::vector<sf::Vector2f> screenPoints;
+        sf::Vector3f worldUp = {0, 1, 0};
+        sf::Vector3f forward = {cos(camera.verticalAngle)*sin(camera.horizontalAngle), sin(camera.verticalAngle), cos(camera.verticalAngle)*cos(camera.horizontalAngle)};
+        sf::Vector3f right = -cap(crossProduct(forward, worldUp));
+        sf::Vector3f up = cap(crossProduct(forward, right));
+        sf::Vector3f rotated;
         for (int i = 0; i < points.size(); i++){
             Point& point = points[i];
             sf::Vector3f relative = point.pos - camera.pos;
-            sf::Vector3f rotated;
-            rotated.x = relative.x* cos(camera.theta) - relative.z* sin(camera.theta);
-            rotated.z = relative.x* sin(camera.theta) + relative.z* cos(camera.theta);
-            rotated.y = relative.y;
+            rotated.x = dotProduct(relative, right);
+            rotated.y = dotProduct(relative, up);
+            rotated.z = dotProduct(relative, forward);
+
             if (rotated.z > 0.01){
                 float x_ = rotated.x/rotated.z;
                 float y_ = rotated.y/rotated.z;
@@ -142,14 +148,11 @@ class Cube:public PhysicsObject{
     {
         pos = positionPara;
     }
-    void draw(sf::RenderTarget& target, Camera& camera){
+    void draw(sf::RenderTarget& target, Camera& camera){        
         for (int i = 0; i < points.size(); i++){
             points[i].pos = pointOffsets[i]+pos;
         }
         std::vector<sf::Vector2f> screenPoints = resolvePoints(points, camera);
-        // for (int i = 0; i < screenPoints.size(); i++){
-        //     points[i].draw(target, screenPoints[i]);
-        // }
         for (int i = 0; i < lines.size(); i++){
             lines[i].draw(target, screenPoints[lines[i].point1], screenPoints[lines[i].point2]);
         }
@@ -177,7 +180,7 @@ int main(){
     camera.pos = {0, 0, 0};
     camera.scale = 600;
     camera.vel = {0, 0, 0};
-    camera.theta = 0;
+    camera.horizontalAngle = 0;
 
     Mouse mouse;
 
@@ -190,7 +193,7 @@ int main(){
         }
         
     }
-    
+
 
     double leftovertime = 0;
     float dt = 0;
@@ -273,13 +276,8 @@ int main(){
             leftovertime -= PHYSICS_STEP;
         }
 
-        // if ( camera.moveForward) {  camera.vel = cap(camera.direction) * 5.0f; }
-        // else if ( camera.moveBackward ) { camera.vel = -cap(camera.direction) * 5.0f; }
-
-        // if ( camera.moveLeft ) { camera.vel = cap(crossProduct(camera.direction, sf::Vector3f{0, 1, 0})) * 10.0f; }
-        // else if ( camera.moveRight ) { camera.vel = -cap(crossProduct(camera.direction, sf::Vector3f{0, 1, 0}))* 10.0f; }
-        sf::Vector3f forward = {sin(camera.theta), 0, cos(camera.theta)};
-        sf::Vector3f right = {cos(camera.theta), 0, -sin(camera.theta)};
+        sf::Vector3f forward = {cos(camera.verticalAngle)*sin(camera.horizontalAngle), sin(camera.verticalAngle), cos(camera.verticalAngle)*cos(camera.horizontalAngle)};
+        sf::Vector3f right = -cap(crossProduct(forward, sf::Vector3f{0, 1, 0}));
         if ( camera.moveForward) {  camera.vel = forward * 100.0f; }
         else if ( camera.moveBackward ) { camera.vel = -forward* 80.0f; }
 
@@ -299,7 +297,14 @@ int main(){
 
         sf::Mouse::setPosition(center, window);
 
-        camera.theta += deltaX* mouse.sensitivity;
+        camera.horizontalAngle += deltaX* mouse.sensitivity;
+        camera.verticalAngle -= deltaY*1.2* mouse.sensitivity;
+        if (camera.verticalAngle>45*(3.14/180)){
+            camera.verticalAngle = 45*(3.14/180);
+        }
+        if( camera.verticalAngle< -45*(3.14/180)){
+            camera.verticalAngle = -45*(3.14/180);
+        }
 
         window.clear();
 
