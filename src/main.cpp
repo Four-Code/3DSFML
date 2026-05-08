@@ -1,5 +1,6 @@
 #include <SFML/Graphics.hpp>
 #include <cmath>
+#include <iostream>
 
 float screenHeight = 800;
 float screenWidth = 1200;
@@ -159,6 +160,113 @@ class Cube:public PhysicsObject{
     }
 };
 
+class Circle:public PhysicsObject{
+    public:
+    float radius;
+    float resolution;
+    std::vector<Point> points;
+    std::vector<sf::Vector3f> pointOffsets;
+    std::vector<Line> lines;
+    
+    Circle(float radiusPara, float resoultionPara = 5)
+    :radius(radiusPara), resolution(resoultionPara)
+    {
+        float theta = 2*3.14/resolution;
+        
+        for (int i = 0; i < resolution; i++){
+            pointOffsets.push_back({radius* cos(i*theta), 0, radius* sin(i*theta)});
+            if (i+1<resolution){
+                lines.push_back({i, i+1});
+            }
+            else{
+                lines.push_back({i, 0});
+            }
+        }
+        points.resize(pointOffsets.size());
+        
+    }
+    std::vector<sf::Vector2f> resolve(Camera& camera){
+        for (int i = 0; i < points.size(); i++){
+            points[i].pos = pos+pointOffsets[i];
+        }
+        
+        std::vector<sf::Vector2f> screenPoints = resolvePoints(points, camera);
+        return screenPoints;
+    }
+
+    void draw(sf::RenderTarget& target, Camera& camera){
+        std::vector<sf::Vector2f> screenPoints= resolve(camera);
+        for (int i = 0; i < lines.size(); i++){
+            lines[i].draw(target, screenPoints[lines[i].point1], screenPoints[lines[i].point2]);
+        }        
+    }
+};
+
+
+
+
+class Sphere:public PhysicsObject{
+    public:
+    float radius;
+    std::vector<Circle> circles;
+    std::vector<Line> lines;
+    Sphere(float raidusPara, int resolutionPara = 5)
+    :radius(raidusPara), resolution(resolutionPara)
+    {
+        if (resolution%2==0){resolution++;}
+        float mid = (resolution+1)/2.0f;
+        for (int i = 0; i < resolution; i++){
+            float radius_ = sqrt(pow(radius, 2)- pow(((mid-(i+1))*(2*radius/(resolution+1))), 2));
+            float yoffset = (mid- (i+1))*(2*radius/(resolution+1));
+            Circle circle(radius_, resolution);
+            circle.pos = {pos.x, pos.y+yoffset, pos.z};
+            circles.push_back(circle);
+        }
+        
+    }
+    
+    void draw(sf::RenderTarget& target, Camera& camera){
+        float mid = (resolution+1)/2;
+        resolvedPoints.clear();
+        Point bottom({pos.x, pos.y-radius, pos.z});
+        Point top({pos.x, pos.y+radius, pos.z});
+        std::vector<Point> endPoints = {top, bottom};
+        std::vector<sf::Vector2f> resolvedEndPoints = resolvePoints(endPoints, camera);
+
+        for (int i = 0; i < resolution; i++){
+            float yoffset = (mid- (i+1))*(2*radius/(resolution+1));
+            circles[i].pos = {pos.x, pos.y+yoffset, pos.z};
+            resolvedPoints.push_back(circles[i].resolve(camera));
+        }
+
+        for (int i = 0; i < resolvedPoints.size(); i++){
+            for (int j = 0; j < resolvedPoints[i].size(); j++){
+                Line line(j, j);
+                Line lineLongitude(j, j+1);
+                if (i==0){
+                    line.draw(target, resolvedEndPoints[0], resolvedPoints[i][j]);
+                }
+                if (j+1<resolvedPoints[i].size()){
+                    lineLongitude.draw(target, resolvedPoints[i][j], resolvedPoints[i][j+1]);
+                }
+                else{
+                    lineLongitude.draw(target, resolvedPoints[i][j], resolvedPoints[i][0]);
+                }
+                if (i+1<resolvedPoints.size()){
+                    line.draw(target, resolvedPoints[i][j], resolvedPoints[i+1][j]);
+                }
+                else{
+                    line.draw(target, resolvedPoints[i][j], resolvedEndPoints[1]);
+                }
+            }
+        }
+        
+    }
+    private:
+    int resolution;
+    std::vector<std::vector<sf::Vector2f>> resolvedPoints;
+};
+
 int main(){
     sf::ContextSettings settings;
     settings.antialiasingLevel = 6;
@@ -186,9 +294,14 @@ int main(){
 
     std::vector<Cube> cubes;
 
+    Sphere sphere(20, 15);
+    sphere.pos = {10, 100, 100};
+
+    Point sphereCenter({10, 100, 100});
+
     for (int i = 0; i < 20; i++){
         for (int j = 0; j < 20; j++){
-            Cube cube({j*20, 0, i*20}, 20);
+            Cube cube({j*20, 0, i*20},20);
             cubes.push_back(cube);
         }
         
@@ -311,6 +424,13 @@ int main(){
         for (Cube& cube : cubes){
             cube.draw(window, camera);
         }
+
+        sphere.draw(window, camera);
+        std::vector<Point> sphereCenterPoint = {sphereCenter};
+        sf::Vector2f sphereCenterScreenPoints = resolvePoints(sphereCenterPoint, camera)[0];
+        sphereCenter.draw(window, sphereCenterScreenPoints);
+        
+
         if (pipe){
             texture.update(window);
             sf::Image image = texture.copyToImage();
